@@ -62,8 +62,6 @@ get_design <- function(N = 100000, pop_spec = NULL){
   d[z, b := sample(pop_spec$r_b[z, b], size = .N, replace = T, prob = pop_spec$r_b[z, p])]
   setkey(d, id)
 
-
-
   # Antibiotic type domain (C)
 
   # Here I make eligibility random to reflect that some of our cohort will not
@@ -187,15 +185,16 @@ get_trial_data <- function(N = 100000, pop_spec = NULL, sim_spec = NULL){
 
   stopifnot(sum(complete.cases(d)) == nrow(d))
 
-  # d[b_a_chronic > 0, .(silo, joint, ea, a)][, unique(silo)]
-  # d[b_a_chronic > 0, .(silo, joint, ea, a)][, unique(ea)]
-  # d[b_a_chronic > 0, .(silo, joint, ea, a)][, unique(a)]
-
-  d[, eta := alpha_su + g_a + g_b + g_c +
-      b_a_late + b_a_chronic +
+  d[, eta := alpha_su +
+      # g_a is redunant (and fixed at zero but I include anyway, more as a
+      # reminder than anything else that I may need a g_a in the future)
+      g_a + g_b + g_c +
+      b_a_late +
+      b_a_chronic +
       b_b1_late_one + b_b2_late_two +
       b_b1_chronic_one + b_b2_chronic_two +
-      b_c]
+      b_c
+    ]
 
   d[, y := rbinom(.N, 1, plogis(eta))]
 
