@@ -54,6 +54,39 @@ get_sim_spec <- function(){
   # type
   b_c <- c(norif = 0, rif = log(1.3))
 
+
+  i_a_s_u <- matrix(1:6, byrow = T, ncol = 2)
+  colnames(i_a_s_u) <- c("knee", "hip")
+  rownames(i_a_s_u) <- c("early", "late", "chronic")
+
+
+  i_a_s_u <- CJ(silo = c("early", "late", "chronic"),
+                joint = c("knee", "hip"))
+  setkey(i_a_s_u, silo, joint)
+  i_a_s_u[.("early", "knee"), su := 1]
+  i_a_s_u[.("early", "hip"), su := 2]
+  i_a_s_u[.("late", "knee"), su := 3]
+  i_a_s_u[.("late", "hip"), su := 4]
+  i_a_s_u[.("chronic", "knee"), su := 5]
+  i_a_s_u[.("chronic", "hip"), su := 6]
+
+  i_early_a <- c(dair = 1)
+  i_late_a <- c(dair = 1, rev = 2)
+  i_chronic_a <- c(one = 1, two = 2)
+
+  # domain a index mappings
+  i_early_qa <- c(dair = 1)
+  i_late_qa <- c(one = 1, two = 2, dair = 3)
+  i_chronic_qa <- c(one = 1, two = 2)
+
+  # domain b index mappings
+  i_early_b <- c(w12 = 1)
+  i_late_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2, w12 = 3)
+  i_chronic_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2)
+
+  i_c <- c(norif = 1, rif = 2, other = 3)
+
+
   pkg.sim$spec <- list(
     a_s_u = a_s_u,
     gamma = gamma,
@@ -63,7 +96,18 @@ get_sim_spec <- function(){
     b_b2_late_two = b_b2_late_two,
     b_b1_chronic_one = b_b1_chronic_one,
     b_b2_chronic_two = b_b2_chronic_two,
-    b_c = b_c
+    b_c = b_c,
+    i_a_s_u = i_a_s_u,
+    i_early_a = i_early_a,
+    i_late_a = i_late_a,
+    i_chronic_a = i_chronic_a,
+    i_early_qa = i_early_qa,
+    i_late_qa = i_late_qa,
+    i_chronic_qa = i_chronic_qa,
+    i_early_b = i_early_b,
+    i_late_b = i_late_b,
+    i_chronic_b = i_chronic_b,
+    i_c = i_c
   )
 
   pkg.sim$spec

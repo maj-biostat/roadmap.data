@@ -200,7 +200,7 @@ get_trial_data <- function(N = 100000, pop_spec = NULL, sim_spec = NULL){
 
   setkey(d, id)
 
-  d_i <- get_indexes(d)
+  d_i <- get_indexes(d, sim_spec)
 
   list(
     d = d, # original data
@@ -209,7 +209,12 @@ get_trial_data <- function(N = 100000, pop_spec = NULL, sim_spec = NULL){
 }
 
 
-get_indexes <- function(d){
+get_indexes <- function(d, sim_spec = NULL){
+
+  if(is.null(sim_spec)){
+    sim_spec <- get_sim_spec()
+  }
+
 
   # replace text with indexes
   d_i <- copy(d[, .SD, .SDcols = !c(
@@ -221,19 +226,19 @@ get_indexes <- function(d){
   # 999 are redundant indexes - never get referenced
   # stan doesn't like NA
 
-  i_early_a <- c(dair = 1)
-  i_late_a <- c(dair = 1, rev = 2)
-  i_chronic_a <- c(one = 1, two = 2)
-
-  i_early_qa <- c(dair = 1)
-  i_late_qa <- c(one = 1, two = 2, dair = 3)
-  i_chronic_qa <- c(one = 1, two = 2)
-
-  i_early_b <- c(w12 = 1)
-  i_late_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2, w12 = 3)
-  i_chronic_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2)
-
-  i_c <- c(norif = 1, rif = 2, other = 3)
+  # i_early_a <- c(dair = 1)
+  # i_late_a <- c(dair = 1, rev = 2)
+  # i_chronic_a <- c(one = 1, two = 2)
+  #
+  # i_early_qa <- c(dair = 1)
+  # i_late_qa <- c(one = 1, two = 2, dair = 3)
+  # i_chronic_qa <- c(one = 1, two = 2)
+  #
+  # i_early_b <- c(w12 = 1)
+  # i_late_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2, w12 = 3)
+  # i_chronic_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2)
+  #
+  # i_c <- c(norif = 1, rif = 2, other = 3)
 
   d_i[, silo := factor(silo, levels = c("early", "late", "chronic"))]
   d_i[, joint := factor(joint, levels = c("knee", "hip"))]
@@ -242,31 +247,98 @@ get_indexes <- function(d){
   d_i[, eb := as.integer(eb == "Y")]
   d_i[, ec := as.integer(ec == "Y")]
 
-  d_i[silo == "early", a := i_early_a[a]]
-  d_i[silo == "late", a := i_late_a[a]]
-  d_i[silo == "chronic", a := i_chronic_a[a]]
+  d_i[silo == "early", a := sim_spec$i_early_a[a]]
+  d_i[silo == "late", a := sim_spec$i_late_a[a]]
+  d_i[silo == "chronic", a := sim_spec$i_chronic_a[a]]
   d_i[, a := as.integer(a)]
 
-  d_i[silo == "early", qa := i_early_qa[qa]]
-  d_i[silo == "late", qa := i_late_qa[qa]]
-  d_i[silo == "chronic", qa := i_chronic_qa[qa]]
+  d_i[silo == "early", qa := sim_spec$i_early_qa[qa]]
+  d_i[silo == "late", qa := sim_spec$i_late_qa[qa]]
+  d_i[silo == "chronic", qa := sim_spec$i_chronic_qa[qa]]
   d_i[, qa := as.integer(qa)]
 
-  d_i[silo == "early", b := i_early_b[b]]
-  d_i[silo == "late", b := i_late_b[b]]
-  d_i[silo == "chronic", b := i_chronic_b[b]]
+  d_i[silo == "early", b := sim_spec$i_early_b[b]]
+  d_i[silo == "late", b := sim_spec$i_late_b[b]]
+  d_i[silo == "chronic", b := sim_spec$i_chronic_b[b]]
   d_i[, b := as.integer(b)]
 
-  d_i[, c := i_c[c]]
+  d_i[, c := sim_spec$i_c[c]]
   d_i[, c := as.integer(c)]
 
   # index for intercept
-  d_i[silo == "early" & joint == "knee", su := 1]
-  d_i[silo == "early" & joint == "hip", su := 2]
-  d_i[silo == "late" & joint == "knee", su := 3]
-  d_i[silo == "late" & joint == "hip", su := 4]
-  d_i[silo == "chronic" & joint == "knee", su := 5]
-  d_i[silo == "chronic" & joint == "hip", su := 6]
+  # -  d_i[silo == "early" & joint == "knee", su := 1]
+  # -  d_i[silo == "early" & joint == "hip", su := 2]
+  # -  d_i[silo == "late" & joint == "knee", su := 3]
+  # -  d_i[silo == "late" & joint == "hip", su := 4]
+  # -  d_i[silo == "chronic" & joint == "knee", su := 5]
+  # -  d_i[silo == "chronic" & joint == "hip", su := 6]
+  # d_i[, su := sim_spec$i_a_s_u[cbind(silo, joint)]]
+
+  d_i <- merge(d_i, sim_spec$i_a_s_u, by = c("silo", "joint"))
 
   d_i
 }
+
+get_stan_data <- function(d_i){
+
+  d_b <- d_i[, .(y = sum(y), n = .N), keyby = .(silo, joint, su, ea, a, qa, eb, b, ec, c, eta)]
+
+  ld <- list(
+    N_e = d_b[silo == "early", .N],
+    e_su = d_b[silo == "early", su],
+    e_y = d_b[silo == "early", y],
+    e_n = d_b[silo == "early", n],
+    e_ec = d_b[silo == "early", ec],
+    e_ecp = d_b[silo == "early", 1-ec],
+    e_c = d_b[silo == "early", c],
+
+    N_l = d_b[silo == "late", .N],
+    l_su = d_b[silo == "late", su],
+    l_y = d_b[silo == "late", y],
+    l_n = d_b[silo == "late", n],
+    l_ec = d_b[silo == "late", ec],
+    l_ecp = d_b[silo == "late", 1-ec],
+    l_c = d_b[silo == "late", c],
+    l_ea = d_b[silo == "late", ea],
+    l_eap = d_b[silo == "late", 1-ea],
+    l_a = d_b[silo == "late", a],
+    # below a indicates revision and plan indicates one-stage
+    l_eb1 = d_b[silo == "late", as.integer(a == 2 & qa == 1)],
+    # below a indicates revision and plan indicates two-stage
+    l_eb2 = d_b[silo == "late", as.integer(a == 2 & qa == 2)],
+    l_ebp = d_b[silo == "late", 1-eb],
+    l_b = d_b[silo == "late", b],
+
+    # chronic silo
+    N_c = d_b[silo == "chronic", .N],
+    c_su = d_b[silo == "chronic", su],
+    c_y = d_b[silo == "chronic", y],
+    c_n = d_b[silo == "chronic", n],
+    # domain c randomisation/membership
+    c_ec = d_b[silo == "chronic", ec],
+    # domain c non-randomisation/non-membership
+    c_ecp = d_b[silo == "chronic", 1-ec],
+    # domain c allocation
+    c_c = d_b[silo == "chronic", c],
+    # domain a allocation
+    c_ea = d_b[silo == "chronic", ea],
+    c_eap = d_b[silo == "chronic", 1-ea],
+    c_a = d_b[silo == "chronic", a],
+    # domain b randomisation/membership for one-stage pt
+    c_eb1 = d_b[silo == "chronic", as.integer(a == 1)],
+    # domain b randomisation/membership for two-stage pt
+    c_eb2 = d_b[silo == "chronic", as.integer(a == 2)],
+    # domain b non-randomisation/non-membership
+    c_ebp = d_b[silo == "chronic", 1-eb],
+    c_b = d_b[silo == "chronic", b]
+  )
+
+  list(
+    d_b = d_b,
+    ld = ld
+  )
+
+}
+
+
+
