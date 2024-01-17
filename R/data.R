@@ -281,6 +281,11 @@ get_indexes <- function(d, sim_spec = NULL){
 
 get_stan_data <- function(d_i){
 
+  # ensures that d_b is ordered in the same way as ld so that the indexes
+  # for eta in the generated quantities block line up.
+  d_i[, silo := factor(silo, levels = c("early", "late", "chronic"))]
+  d_i[, joint := factor(joint, levels = c("knee", "hip"))]
+
   d_b <- d_i[, .(y = sum(y), n = .N), keyby = .(silo, joint, su, ea, a, qa, eb, b, ec, c, eta)]
 
   ld <- list(
