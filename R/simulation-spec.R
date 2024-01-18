@@ -2,6 +2,23 @@ library(data.table)
 
 pkg.sim <- new.env()
 
+# somewhat meaningful names for parameters at relevant indexes
+# from stan model.
+get_par_effects_mapping <- function(){
+
+  c(
+    b_a_l_2 = "b_a_late_rev",
+    b_a_c_2 = "b_a_chronic_two",
+    b_b1_l_2 = "b_b1_late_one_w12p1",
+    b_b2_l_2 = "b_b2_late_two_w12p2",
+    b_b1_c_2 = "b_b1_chronic_one_w12p1", # ref level is w06p1
+    b_b2_c_2 = "b_b2_chronic_two_w12p2", # ref level is d07p2
+    b_c_2 = "b_c_rif"
+  )
+
+
+}
+
 get_sim_spec <- function(){
 
   a_s_u <- qlogis(
@@ -111,4 +128,21 @@ get_sim_spec <- function(){
   )
 
   pkg.sim$spec
+}
+
+
+
+get_sim_spec_effects <- function(sim_spec = NULL){
+
+  stopifnot(!is.null(sim_spec))
+
+  data.table(
+    b_a_late_rev = sim_spec$b_a_late["rev"],
+    b_a_chronic_two = sim_spec$b_a_chronic["two"],
+    b_b1_late_one_w12p1 = sim_spec$b_b1_late_one["w12p1"],
+    b_b1_late_two_w12p2 = sim_spec$b_b2_late_two["w12p2"],
+    b_b1_chronic_one_w12p1 = sim_spec$b_b1_chronic_one["w12p1"],
+    b_b2_chronic_two_w12p2 = sim_spec$b_b2_chronic_two["w12p2"],
+    b_c = sim_spec$b_c["rif"]
+  )
 }
