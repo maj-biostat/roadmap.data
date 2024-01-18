@@ -335,7 +335,17 @@ get_stan_data <- function(d_i){
     c_eb2 = d_b[silo == "chronic", as.integer(a == 2)],
     # domain b non-randomisation/non-membership
     c_ebp = d_b[silo == "chronic", 1-eb],
-    c_b = d_b[silo == "chronic", b]
+    c_b = d_b[silo == "chronic", b],
+
+    # default are standard normal priors, just set sd:
+    pri_sig_b_c = 1.0,
+    pri_sig_a_l = 1.0,
+    pri_sig_b1_l = 1.0,
+    pri_sig_b2_l = 1.0,
+    pri_sig_a_c = 1.0,
+    pri_sig_b1_c = 1.0,
+    pri_sig_b2_c = 1.0
+
   )
 
   list(
