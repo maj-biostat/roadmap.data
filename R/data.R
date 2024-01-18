@@ -1,7 +1,7 @@
 library(data.table)
 library(poisson)
 
-N = 100000
+N = 1000
 pop_spec = NULL
 sim_spec = NULL
 
@@ -131,6 +131,7 @@ get_trial_data <- function(N = 100000, pop_spec = NULL, sim_spec = NULL){
 
   setkey(d, silo, ea)
   d[.("late", "Y"), b_a_late := sim_spec$b_a_late[a]]
+  # d[silo == "late", .(unique(b_a_late), .N), keyby = .(ea, a)]
   # set the missing to zero so there are no NAs
   d[.("early"), b_a_late := 0]
   d[.("late", "N"), b_a_late := 0]
@@ -185,6 +186,14 @@ get_trial_data <- function(N = 100000, pop_spec = NULL, sim_spec = NULL){
 
   stopifnot(sum(complete.cases(d)) == nrow(d))
 
+  # d[silo == "late", .(.N), keyby = .(
+  #   silo, joint, ea, a, qa, eb, b, ec, c,
+  #   eta,
+  #   b_a_late, b_a_chronic,
+  #   b_b1_late_one, b_b2_late_two, b_b1_chronic_one, b_b2_chronic_two,
+  #   b_c)]
+
+
   d[, eta := alpha_su +
       # g_a is redunant (and fixed at zero but I include anyway, more as a
       # reminder than anything else that I may need a g_a in the future)
@@ -223,23 +232,6 @@ get_indexes <- function(d, sim_spec = NULL){
     "b_a_chronic", "b_b1_chronic_one", "b_b2_chronic_two")])
   setkey(d_i, id)
 
-  # 999 are redundant indexes - never get referenced
-  # stan doesn't like NA
-
-  # i_early_a <- c(dair = 1)
-  # i_late_a <- c(dair = 1, rev = 2)
-  # i_chronic_a <- c(one = 1, two = 2)
-  #
-  # i_early_qa <- c(dair = 1)
-  # i_late_qa <- c(one = 1, two = 2, dair = 3)
-  # i_chronic_qa <- c(one = 1, two = 2)
-  #
-  # i_early_b <- c(w12 = 1)
-  # i_late_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2, w12 = 3)
-  # i_chronic_b <- c(w06p1 = 1, w12p1 = 2, d07p2 = 1, w12p2 = 2)
-  #
-  # i_c <- c(norif = 1, rif = 2, other = 3)
-
   d_i[, silo := factor(silo, levels = c("early", "late", "chronic"))]
   d_i[, joint := factor(joint, levels = c("knee", "hip"))]
 
@@ -266,13 +258,6 @@ get_indexes <- function(d, sim_spec = NULL){
   d_i[, c := as.integer(c)]
 
   # index for intercept
-  # -  d_i[silo == "early" & joint == "knee", su := 1]
-  # -  d_i[silo == "early" & joint == "hip", su := 2]
-  # -  d_i[silo == "late" & joint == "knee", su := 3]
-  # -  d_i[silo == "late" & joint == "hip", su := 4]
-  # -  d_i[silo == "chronic" & joint == "knee", su := 5]
-  # -  d_i[silo == "chronic" & joint == "hip", su := 6]
-  # d_i[, su := sim_spec$i_a_s_u[cbind(silo, joint)]]
 
   d_i <- merge(d_i, sim_spec$i_a_s_u, by = c("silo", "joint"))
 
