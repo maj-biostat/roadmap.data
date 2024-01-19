@@ -37,8 +37,8 @@ get_sim_spec <- function(){
   gamma <- log(
     array(
       c(1,1,1,1,1,0.9,
-        1,1,1,1,0.9,0.95,
-        1,1,1,1,0.9,0.95),
+        1,1,1,1,1,0.9,
+        1,1,1,1,1,0.9),
       dim = c(3,2,3),
       dimnames = list(
         c("a", "b", "c"),
@@ -143,6 +143,6 @@ get_sim_spec_effects <- function(sim_spec = NULL){
     b_b1_late_two_w12p2 = sim_spec$b_b2_late_two["w12p2"],
     b_b1_chronic_one_w12p1 = sim_spec$b_b1_chronic_one["w12p1"],
     b_b2_chronic_two_w12p2 = sim_spec$b_b2_chronic_two["w12p2"],
-    b_c = sim_spec$b_c["rif"]
+    b_c_rif = sim_spec$b_c["rif"]
   )
 }
