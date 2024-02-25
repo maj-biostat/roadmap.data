@@ -20,7 +20,7 @@ get_pop_spec()
   \item{r_a}{Allocation probabilities for each silo treatment options for domain \code{a}}
   \item{r_a_q}{Captures allocation probabilities for planned procedure for late stage patients allocated to revision in domain \code{a}}
   \item{r_eb}{Indicator of entry into domain \code{b} by silo.}
-  \item{r_b}{Allocation probabilities for each domain \code{b} conditional on surgical procedure}
+  \item{r_b}{Allocation probabilities for each domain \code{b} conditional on surgical procedure. Note that these are split out into silos to allow for silo-specific adaptations}
   \item{r_ec}{Indicator of entry into domain \code{b} by silo with expected proportion entering domain by silo.}
   \item{r_a}{Allocation probabilities for each silo treatment options for domain \code{c}}
 
