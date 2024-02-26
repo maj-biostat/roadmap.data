@@ -4,20 +4,20 @@ pkg.sim <- new.env()
 
 # somewhat meaningful names for parameters at relevant indexes
 # from stan model.
-get_par_effects_mapping <- function(){
-
-  c(
-    b_a_l_2 = "b_a_late_rev",
-    b_a_c_2 = "b_a_chronic_two",
-    b_b1_l_2 = "b_b1_late_one_w12p1",
-    b_b2_l_2 = "b_b2_late_two_w12p2",
-    b_b1_c_2 = "b_b1_chronic_one_w12p1", # ref level is w06p1
-    b_b2_c_2 = "b_b2_chronic_two_w12p2", # ref level is d07p2
-    b_c_2 = "b_c_rif"
-  )
-
-
-}
+# get_par_effects_mapping <- function(){
+#
+#   c(
+#     b_a_l_2 = "b_a_late_rev",
+#     b_a_c_2 = "b_a_chronic_two",
+#     b_b1_l_2 = "b_b1_late_one_w12p1",
+#     b_b2_l_2 = "b_b2_late_two_w12p2",
+#     b_b1_c_2 = "b_b1_chronic_one_w12p1", # ref level is w06p1
+#     b_b2_c_2 = "b_b2_chronic_two_w12p2", # ref level is d07p2
+#     b_c_2 = "b_c_rif"
+#   )
+#
+#
+# }
 
 get_sim_spec_new <- function(){
 

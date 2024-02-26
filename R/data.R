@@ -28,10 +28,11 @@ idx_s = 1
 # srp2 indicator of two stage procedure performed
 # d duration random assignment
 # f ab choice random assignment
-N = 1e6
-idx_s = 1
-set.seed(1)
-pop_spec <- get_pop_spec_new()
+
+# N = 1e6
+# idx_s = 1
+# set.seed(1)
+# pop_spec <- get_pop_spec_new()
 get_design_new <- function(N = 2500, pop_spec = NULL, idx_s = 1){
 
   if(is.null(pop_spec)){
@@ -222,6 +223,12 @@ get_stan_data_new <- function(d){
 
 }
 
+get_enrol_time <- function(N = 2500, lambda = 1.52,
+                           rho = function(t) pmin(t/360, 1)){
+
+  c(0, nhpp.event.times(lambda, N - 1, rho))
+}
+
 
 # Original approach - keep in place until switch over to new version so that
 # everything else keeps working.
@@ -323,12 +330,7 @@ get_stan_data_new <- function(d){
 #   d
 # }
 #
-# get_enrol_time <- function(N = 2500, lambda = 1.52,
-#                            rho = function(t) pmin(t/360, 1)){
-#
-#   c(0, nhpp.event.times(lambda, N - 1, rho))
-# }
-#
+
 # get_trial_data <- function(N = 100000, pop_spec = NULL, sim_spec = NULL,
 #                            idx_s = 1, entry_times = T){
 #
