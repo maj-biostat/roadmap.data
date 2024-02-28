@@ -32,11 +32,11 @@ idx_s = 1
 # N = 1e6
 # idx_s = 1
 # set.seed(1)
-# pop_spec <- get_pop_spec_new()
-get_design_new <- function(N = 2500, pop_spec = NULL, idx_s = 1){
+# pop_spec <- get_pop_spec()
+get_design <- function(N = 2500, pop_spec = NULL, idx_s = 1){
 
   if(is.null(pop_spec)){
-    pop_spec <- get_pop_spec_new()
+    pop_spec <- get_pop_spec()
   }
 
   # silo (l)
@@ -52,9 +52,16 @@ get_design_new <- function(N = 2500, pop_spec = NULL, idx_s = 1){
   # you can leave this out, but the model spec will need to be updated
   # because there will be linearly depenedent cols in the design matrix, e.g.
   # l1 == er
-  er <- as.numeric(l == 1)
-  i_rec <- as.logical(rbinom(er[l==1], 1, 0.04))
-  er[l==1][i_rec] <- 0
+
+  # if rand has been shut off then do not enrol any more into surgical domain
+  if(all(is.na(unlist(pop_spec$r_a)))){
+    er <- rep(0, N)
+  } else{
+    er <- as.numeric(l == 1)
+    i_rec <- as.logical(rbinom(er[l==1], 1, 0.02))
+    er[l==1][i_rec] <- 0
+  }
+
 
   # randomise surgery - silo specific allocation probs.
   r <- rep(NA, N)
@@ -102,7 +109,22 @@ get_design_new <- function(N = 2500, pop_spec = NULL, idx_s = 1){
   rp <- as.numeric(srp %in% 1:2)
 
   # reveal for duration
-  ed <- as.numeric(rp == 1)
+
+  # reveal only occurs for the duration that the effects are being evaluated
+  # if the question of duration is answered in the cohort recv one-stage
+  # (indicated by all randomisation probs being NA for that cohort) then
+  # they no longer contribute to the randomised comparison for the duration
+  # domain.
+
+  dtmp <- data.table(rp, srp, ed = rep(0, N))
+  if(all(!is.na(pop_spec$r_b$one))){
+    dtmp[rp == 1 & srp == 1, ed := 1]
+  }
+  if(all(!is.na(pop_spec$r_b$two))){
+    dtmp[rp == 1 & srp == 2, ed := 1]
+  }
+  ed <- dtmp$ed
+
   # rand to long (0), short (1) based on surgery received
 
   d <- rep(NA, N)
@@ -115,13 +137,21 @@ get_design_new <- function(N = 2500, pop_spec = NULL, idx_s = 1){
     }
   }
 
-  # dtmp <- data.table(id = 1:N, l1, er, r, ra, ic, srp, d)
-  # dtmp[er == 1 & r == 0 & l1== 1 & srp == 1 ]
-  # dtmp[er == 1 & r == 0 & l1== 1 & srp == 2 ]
+  # reveal for ab choice
 
-  # 60% reveal ab choice
-  ef <- rbinom(N, 1, 0.6)
-  f <- as.numeric((ef == 1) * rbinom(N, 1, pop_spec$r_c))
+  # again, reveal only occurs for the duration that the effects are being
+  # evaluated if the question of choice is decided
+  # (indicated by all randomisation probs being NA for rif) then
+  # they no further enrolments happen for ab choice.
+
+  if(all(is.na(pop_spec$r_c))){
+    ef <- rep(0, N)
+    f <- rep(0, N)
+  } else {
+    # 60% reveal ab choice
+    ef <- rbinom(N, 1, 0.6)
+    f <- as.numeric((ef == 1) * rbinom(N, 1, pop_spec$r_c))
+  }
 
   D <- data.table(
     l, l1, l2, j,
@@ -138,7 +168,7 @@ get_design_new <- function(N = 2500, pop_spec = NULL, idx_s = 1){
   D
 }
 
-get_trial_data_new <- function(
+get_trial_data <- function(
     N = 100000,
     pop_spec = NULL,
     sim_spec = NULL,
@@ -170,18 +200,18 @@ get_trial_data_new <- function(
         b["f"] * d$f * d$ef
 
       eta
-      }
-    ){
+    }
+){
 
   if(is.null(pop_spec)){
-    pop_spec <- get_pop_spec_new()
+    pop_spec <- get_pop_spec()
   }
 
   if(is.null(sim_spec)){
-    sim_spec <- get_sim_spec_new()
+    sim_spec <- get_sim_spec()
   }
 
-  d <- get_design_new(N, pop_spec, idx_s)
+  d <- get_design(N, pop_spec, idx_s)
 
   if(entry_times == T){
     d[, t0 := get_enrol_time(.N)]
@@ -200,7 +230,7 @@ get_trial_data_new <- function(
   )
 }
 
-get_stan_data_new <- function(d){
+get_stan_data <- function(d){
 
   d_s <- d[, .(y = sum(y), n = .N),
            keyby = .(l1, l2, er, ed, ef, r, rp, srp2, d, f)]
@@ -230,363 +260,117 @@ get_enrol_time <- function(N = 2500, lambda = 1.52,
 }
 
 
-# Original approach - keep in place until switch over to new version so that
-# everything else keeps working.
+
+test_get_design <- function(){
 
 
-# get_design <- function(N = 100000, pop_spec = NULL, idx_s = 1){
-#
-#   if(is.null(pop_spec)){
-#     pop_spec <- get_pop_spec()
-#   }
-#
-#   d <- data.table()
-#   # pt id
-#   d[, id := idx_s:(N+idx_s - 1)]
-#   d[, silo := sample(pop_spec$r_silo$silo, size = N, replace = T, prob = pop_spec$r_silo$p)]
-#   setkey(d, silo)
-#   setkey(pop_spec$r_joint, silo)
-#   setkey(pop_spec$r_ea, silo)
-#   # for each silo, create joint covariate based on the pop_spec dist
-#   # also create entry into domain a
-#   for(z in pop_spec$r_silo$silo){
-#     d[z, joint :=
-#         sample(pop_spec$r_joint[z, joint], size = .N, replace = T, prob = pop_spec$r_joint[z, p])
-#     ]
-#
-#     # might as well set ea (eligibility for domain a)
-#     d[z, ea := pop_spec$r_ea[z, rand]]
-#   }
-#
-#   # Surgery domain (A)
-#   setkey(pop_spec$r_a, silo)
-#   z <- "late"
-#
-#   d["early", a := "dair"]
-#   z <- "late"
-#   d[z, a := sample(pop_spec$r_a[z, a], size = .N, replace = T, prob = pop_spec$r_a[z, p])]
-#   z <- "chronic"
-#   d[z, a := sample(pop_spec$r_a_q[z, qa], size = .N, replace = T, prob = pop_spec$r_a_q[z, p])]
-#
-#   # introduce the intended surgical approach (for late stage allocated to revision)
-#   setkey(d, silo, a)
-#   setkey(pop_spec$r_a_q, silo, a)
-#   d[.("late", "rev"), qa :=
-#       sample(pop_spec$r_a_q[.("late", "rev"), qa], size = .N, replace = T, prob = pop_spec$r_a_q[.("late", "rev"), p])]
-#   d[is.na(qa), qa := copy(a)]
-#
-#   # Duration domain (B)
-#   # eligibility based on a
-#   d <- merge(d, pop_spec$r_eb[, .(qa, eb = rand)], by = c("qa"), all.x = T)
-#   setcolorder(d, c("id", "silo", "joint", "ea", "a", "qa","eb"))
-#   setkey(d, id)
-#
-#   setkey(d, qa)
-#   setkey(pop_spec$r_b, qa)
-#   # all dair get 12wk
-#   d["dair", b := pop_spec$r_b["dair", unique(b)]]
-#
-#   setkey(d, silo, qa)
-#   setkey(pop_spec$r_b, silo, qa)
-#
-#   # do these separately so that triggers can coordinate silo specific adaptations
-#   d[.("late", "one"), b := sample(
-#     pop_spec$r_b[.("late", "one"), b], size = .N, replace = T,
-#     prob = pop_spec$r_b[.("late", "one"), p])]
-#   d[.("late", "two"), b := sample(
-#     pop_spec$r_b[.("late", "two"), b], size = .N, replace = T,
-#     prob = pop_spec$r_b[.("late", "two"), p])]
-#
-#   d[.("chronic", "one"), b := sample(
-#     pop_spec$r_b[.("chronic", "one"), b], size = .N, replace = T,
-#     prob = pop_spec$r_b[.("chronic", "one"), p])]
-#   d[.("chronic", "two"), b := sample(
-#     pop_spec$r_b[.("chronic", "two"), b], size = .N, replace = T,
-#     prob = pop_spec$r_b[.("chronic", "two"), p])]
-#
-#   setkey(d, id)
-#
-#   # Antibiotic type domain (C)
-#
-#   # Here I make eligibility random to reflect that some of our cohort will not
-#   # enter into this domain, irrespective of their randomisation in other domains.
-#   # Each silo is allowed to have a different proportion of pts entering into
-#   # domain C.
-#   setkey(d, silo)
-#   setkey(pop_spec$r_ec, silo)
-#
-#   for(z in pop_spec$r_ec$silo){
-#     d[z, ec :=
-#         sample(c("Y","N"), size = .N, replace = T, prob = c(pop_spec$r_ec[z, p], 1- pop_spec$r_ec[z, p]))
-#     ]
-#   }
-#
-#   d[ec == "Y",
-#     c := sample(pop_spec$r_c[, c], size = .N, replace = T, prob = pop_spec$r_c[, p])]
-#   d[ec == "N", c := "other"]
-#
-#   setkey(d, id)
-#
-#   d
-# }
-#
+  source("R/simulation-spec.R")
+  source("R/population-spec.R")
 
-# get_trial_data <- function(N = 100000, pop_spec = NULL, sim_spec = NULL,
-#                            idx_s = 1, entry_times = T){
-#
-#   if(is.null(pop_spec)){
-#     pop_spec <- get_pop_spec()
-#   }
-#
-#   if(is.null(sim_spec)){
-#     sim_spec <- get_sim_spec()
-#   }
-#
-#   d <- get_design(N, pop_spec, idx_s)
-#   # unique(d[order(silo, joint, ea, a, qa, eb, b, ec, c), .SD, .SDcols = !c("id")])
-#
-#   if(entry_times == T){
-#     d[, t0 := get_enrol_time(.N)]
-#   } else {
-#     d[, t0 := rep(0.0, .N)]
-#   }
-#
-#   # unique(d[order(silo, joint, ea, a, qa, eb, b, ec, c, t0), .SD, .SDcols = !c("id")])
-#
-#   # initialise log-odds trt success
-#   d[, alpha_su := sim_spec$a_s_u[cbind(d$silo,d$joint)]]
-#
-#   # non-membership - todo gamma_a meaningful????
-#   # e.g. gamma["c","N","late"]
-#   d[, g_a := sim_spec$gamma[cbind("a", d$ea, d$silo)]]
-#   d[, g_b := sim_spec$gamma[cbind("b", d$eb, d$silo)]]
-#   d[, g_c := sim_spec$gamma[cbind("c", d$ec, d$silo)]]
-#
-#   # introduce treatment effects by silo
-#
-#   # early stage infection
-#   # can set b_c for all as is currently pooled.
-#   setkey(d, ec)
-#   d[.("Y"), b_c := sim_spec$b_c[c]]
-#   # set non-members to zero so that we don't have NA kicking about in data
-#   d[.("N"), b_c := 0]
-#
-#   # late stage
-#   # assumes full cohort rand in surg - technically, you do not need gamma_a
-#
-#   setkey(d, silo, ea)
-#   d[.("late", "Y"), b_a_late := sim_spec$b_a_late[a]]
-#   # d[silo == "late", .(unique(b_a_late), .N), keyby = .(ea, a)]
-#   # set the missing to zero so there are no NAs
-#   d[.("early"), b_a_late := 0]
-#   d[.("late", "N"), b_a_late := 0]
-#   d[.("chronic"), b_a_late := 0]
-#
-#   setkey(d, silo, eb, qa)
-#   d[.("late", "Y", "one"), b_b1_late_one := sim_spec$b_b1_late_one[b]]
-#   d[.("late", "Y", "two"), b_b2_late_two := sim_spec$b_b2_late_two[b]]
-#   # missing values fill in at the end.
-#   # b_c already set
-#
-#   # chronic
-#   # assumes full cohort rand in surg - ie you do not need gamma_a
-#
-#   setkey(d, silo, ea)
-#   d[.("chronic", "Y"), b_a_chronic := sim_spec$b_a_chronic[a]]
-#   # set the missing to zero so there are no NAs
-#   d[.("early"), b_a_chronic := 0]
-#   d[.("late"), b_a_chronic := 0]
-#   d[.("chronic", "N"), b_a_chronic := 0]
-#
-#   setkey(d, silo, eb, qa)
-#   d[.("chronic", "Y", "one"), b_b1_chronic_one := sim_spec$b_b1_chronic_one[b]]
-#   d[.("chronic", "Y", "two"), b_b2_chronic_two := sim_spec$b_b2_chronic_two[b]]
-#   # b_c was set earlier
-#
-#   # fill missing (redundant) to zero
-#
-#   # obvious first - any that are non-members of b (i.e early silo and those rand to dair)
-#   # need to have all the b params set to zero
-#   setkey(d, eb)
-#   d[.("N"), `:=`(b_b1_late_one = 0, b_b2_late_two = 0, b_b1_chronic_one = 0, b_b2_chronic_two = 0)]
-#
-#   # less obvious
-#   setkey(d, silo, eb, qa)
-#   # if late stage revision with two-stage plan then set b domain one stage par to zero
-#   d[.("late", "Y", "two"), `:=`(b_b1_late_one = 0)]
-#   # analogous but for one-stage plan
-#   d[.("late", "Y", "one"), `:=`(b_b2_late_two = 0)]
-#   # all those in chronic do not contribute to b domain late stage pars (params across silos are indep)
-#   d[.("chronic", "Y"), `:=`(b_b1_late_one = 0, b_b2_late_two = 0)]
-#
-#   # same idea as above but for chronic pts
-#   d[.("chronic", "Y", "two"), `:=`(b_b1_chronic_one = 0)]
-#   d[.("chronic", "Y", "one"), `:=`(b_b2_chronic_two = 0)]
-#   d[.("late", "Y"), `:=`(b_b1_chronic_one = 0, b_b2_chronic_two = 0)]
-#
-#   stopifnot(nrow(d[is.na(b_b1_late_one), .(id, silo, qa, eb, b_b1_late_one, b_b2_late_two, b_b1_chronic_one, b_b2_chronic_two)]) == 0)
-#   stopifnot(nrow(d[is.na(b_b2_late_two), .(id, silo, qa, eb, b_b1_late_one, b_b2_late_two, b_b1_chronic_one, b_b2_chronic_two)]) == 0)
-#   stopifnot(nrow(d[is.na(b_b1_chronic_one), .(id, silo, qa, eb, b_b1_late_one, b_b2_late_two, b_b1_chronic_one, b_b2_chronic_two)]) == 0)
-#   stopifnot(nrow(d[is.na(b_b2_chronic_two), .(id, silo, qa, eb, b_b1_late_one, b_b2_late_two, b_b1_chronic_one, b_b2_chronic_two)]) == 0)
-#
-#   stopifnot(sum(complete.cases(d)) == nrow(d))
-#
-#   # d[silo == "late", .(.N), keyby = .(
-#   #   silo, joint, ea, a, qa, eb, b, ec, c,
-#   #   eta,
-#   #   b_a_late, b_a_chronic,
-#   #   b_b1_late_one, b_b2_late_two, b_b1_chronic_one, b_b2_chronic_two,
-#   #   b_c)]
-#
-#
-#   d[, eta := alpha_su +
-#       # g_a is redunant (and fixed at zero but I include anyway, more as a
-#       # reminder than anything else that I may need a g_a in the future)
-#       g_a + g_b + g_c +
-#       b_a_late +
-#       b_a_chronic +
-#       b_b1_late_one + b_b2_late_two +
-#       b_b1_chronic_one + b_b2_chronic_two +
-#       b_c
-#     ]
-#
-#   d[, y := rbinom(.N, 1, plogis(eta))]
-#
-#   setkey(d, id)
-#
-#   d_i <- get_indexes(d, sim_spec)
-#
-#   list(
-#     d = d, # original data
-#     d_i = d_i # convert to indexes
-#   )
-# }
-#
-#
-# get_indexes <- function(d, sim_spec = NULL){
-#
-#   if(is.null(sim_spec)){
-#     sim_spec <- get_sim_spec()
-#   }
-#
-#
-#   # replace text with indexes
-#   d_i <- copy(d[, .SD, .SDcols = !c(
-#     "alpha_su", "g_a", "g_b", "g_c", "b_c",
-#     "b_a_late", "b_b1_late_one", "b_b2_late_two",
-#     "b_a_chronic", "b_b1_chronic_one", "b_b2_chronic_two")])
-#   setkey(d_i, id)
-#
-#   d_i[, silo := factor(silo, levels = c("early", "late", "chronic"))]
-#   d_i[, joint := factor(joint, levels = c("knee", "hip"))]
-#
-#   d_i[, ea := as.integer(ea == "Y")]
-#   d_i[, eb := as.integer(eb == "Y")]
-#   d_i[, ec := as.integer(ec == "Y")]
-#
-#   d_i[silo == "early", a := sim_spec$i_early_a[a]]
-#   d_i[silo == "late", a := sim_spec$i_late_a[a]]
-#   d_i[silo == "chronic", a := sim_spec$i_chronic_a[a]]
-#   d_i[, a := as.integer(a)]
-#
-#   d_i[silo == "early", qa := sim_spec$i_early_qa[qa]]
-#   d_i[silo == "late", qa := sim_spec$i_late_qa[qa]]
-#   d_i[silo == "chronic", qa := sim_spec$i_chronic_qa[qa]]
-#   d_i[, qa := as.integer(qa)]
-#
-#   d_i[silo == "early", b := sim_spec$i_early_b[b]]
-#   d_i[silo == "late", b := sim_spec$i_late_b[b]]
-#   d_i[silo == "chronic", b := sim_spec$i_chronic_b[b]]
-#   d_i[, b := as.integer(b)]
-#
-#   d_i[, c := sim_spec$i_c[c]]
-#   d_i[, c := as.integer(c)]
-#
-#   # index for intercept
-#
-#   d_i <- merge(d_i, sim_spec$i_a_s_u, by = c("silo", "joint"))
-#   setkey(d_i, id)
-#
-#   d_i
-# }
-#
-# get_stan_data <- function(d_i){
-#
-#   # ensures that d_b is ordered in the same way as ld so that the indexes
-#   # for eta in the generated quantities block line up.
-#   d_i[, silo := factor(silo, levels = c("early", "late", "chronic"))]
-#   d_i[, joint := factor(joint, levels = c("knee", "hip"))]
-#
-#   d_b <- d_i[, .(y = sum(y), n = .N), keyby = .(silo, joint, su, ea, a, qa, eb, b, ec, c, eta)]
-#
-#   ld <- list(
-#     N_e = d_b[silo == "early", .N],
-#     e_su = d_b[silo == "early", su],
-#     e_y = d_b[silo == "early", y],
-#     e_n = d_b[silo == "early", n],
-#     e_ec = d_b[silo == "early", ec],
-#     e_ecp = d_b[silo == "early", 1-ec],
-#     e_c = d_b[silo == "early", c],
-#
-#     N_l = d_b[silo == "late", .N],
-#     l_su = d_b[silo == "late", su],
-#     l_y = d_b[silo == "late", y],
-#     l_n = d_b[silo == "late", n],
-#     l_ec = d_b[silo == "late", ec],
-#     l_ecp = d_b[silo == "late", 1-ec],
-#     l_c = d_b[silo == "late", c],
-#     l_ea = d_b[silo == "late", ea],
-#     l_eap = d_b[silo == "late", 1-ea],
-#     l_a = d_b[silo == "late", a],
-#     # below a indicates revision and plan indicates one-stage
-#     l_eb1 = d_b[silo == "late", as.integer(a == 2 & qa == 1)],
-#     # below a indicates revision and plan indicates two-stage
-#     l_eb2 = d_b[silo == "late", as.integer(a == 2 & qa == 2)],
-#     l_ebp = d_b[silo == "late", 1-eb],
-#     l_b = d_b[silo == "late", b],
-#
-#     # chronic silo
-#     N_c = d_b[silo == "chronic", .N],
-#     c_su = d_b[silo == "chronic", su],
-#     c_y = d_b[silo == "chronic", y],
-#     c_n = d_b[silo == "chronic", n],
-#     # domain c randomisation/membership
-#     c_ec = d_b[silo == "chronic", ec],
-#     # domain c non-randomisation/non-membership
-#     c_ecp = d_b[silo == "chronic", 1-ec],
-#     # domain c allocation
-#     c_c = d_b[silo == "chronic", c],
-#     # domain a allocation
-#     c_ea = d_b[silo == "chronic", ea],
-#     c_eap = d_b[silo == "chronic", 1-ea],
-#     c_a = d_b[silo == "chronic", a],
-#     # domain b randomisation/membership for one-stage pt
-#     c_eb1 = d_b[silo == "chronic", as.integer(a == 1)],
-#     # domain b randomisation/membership for two-stage pt
-#     c_eb2 = d_b[silo == "chronic", as.integer(a == 2)],
-#     # domain b non-randomisation/non-membership
-#     c_ebp = d_b[silo == "chronic", 1-eb],
-#     c_b = d_b[silo == "chronic", b],
-#
-#     # default are standard normal priors, just set sd:
-#     pri_sig_b_c = 1.0,
-#     pri_sig_a_l = 1.0,
-#     pri_sig_b1_l = 1.0,
-#     pri_sig_b2_l = 1.0,
-#     pri_sig_a_c = 1.0,
-#     pri_sig_b1_c = 1.0,
-#     pri_sig_b2_c = 1.0
-#
-#   )
-#
-#   list(
-#     d_b = d_b,
-#     ld = ld
-#   )
-#
-# }
-#
+  # default setting
+  pop_spec <- get_pop_spec()
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] > 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] > 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] > 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] > 0)
+
+  # stop rand to surg
+  pop_spec <- get_pop_spec()
+  pop_spec$r_a$late['dair'] <- NA
+  pop_spec$r_a$late['rev'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] == 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] > 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] > 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] > 0)
+
+  # d1[, .N, keyby = .(ed, srp, d)]
+
+  # stop rand to duration (one-stage)
+  pop_spec <- get_pop_spec()
+  pop_spec$r_b$one['long'] <- NA
+  pop_spec$r_b$one['short'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] > 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] == 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] > 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] > 0)
+
+  # stop rand to duration (two-stage)
+  pop_spec <- get_pop_spec()
+  pop_spec$r_b$two['long'] <- NA
+  pop_spec$r_b$two['short'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] > 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] > 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] == 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] > 0)
+
+  # stop rand to duration (one-stage and two-stage)
+  pop_spec <- get_pop_spec()
+  pop_spec$r_b$one['long'] <- NA
+  pop_spec$r_b$one['short'] <- NA
+  pop_spec$r_b$two['long'] <- NA
+  pop_spec$r_b$two['short'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] > 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] == 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] == 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] > 0)
+
+  # stop rand to choice
+  pop_spec <- get_pop_spec()
+  pop_spec$r_c['norif'] <- NA
+  pop_spec$r_c['rif'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] > 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] > 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] > 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] == 0)
+
+  # stop surg and duration
+  pop_spec <- get_pop_spec()
+  pop_spec$r_a$late['dair'] <- NA
+  pop_spec$r_a$late['rev'] <- NA
+  pop_spec$r_b$one['long'] <- NA
+  pop_spec$r_b$one['short'] <- NA
+  pop_spec$r_b$two['long'] <- NA
+  pop_spec$r_b$two['short'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] == 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] == 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] == 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] > 0)
+
+  # stop surg and choice
+  pop_spec <- get_pop_spec()
+  pop_spec$r_a$late['dair'] <- NA
+  pop_spec$r_a$late['rev'] <- NA
+  pop_spec$r_c['norif'] <- NA
+  pop_spec$r_c['rif'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] == 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] > 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] > 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] == 0)
+
+  # stop duration and choice
+  pop_spec <- get_pop_spec()
+  pop_spec$r_b$one['long'] <- NA
+  pop_spec$r_b$one['short'] <- NA
+  pop_spec$r_b$two['long'] <- NA
+  pop_spec$r_b$two['short'] <- NA
+  pop_spec$r_c['norif'] <- NA
+  pop_spec$r_c['rif'] <- NA
+  d1 <- get_design(N = 10000, pop_spec)
+  stopifnot("no surgery reveal" = d1[er == 1, .N] > 0)
+  stopifnot("no duration reveal (one-stage)" = d1[ed == 1 & srp2 == 0, .N] == 0)
+  stopifnot("no duration reveal (two-stage)" = d1[ed == 1 & srp2 == 1, .N] == 0)
+  stopifnot("no surgery reveal" = d1[ef == 1, .N] == 0)
 
 
+
+}
 
 
