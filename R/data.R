@@ -57,7 +57,9 @@ get_design <- function(N = 2500, pop_spec = NULL, idx_s = 1){
   if(all(is.na(unlist(pop_spec$r_a)))){
     er <- rep(0, N)
   } else{
+    # only late silo can enter surgical domain
     er <- as.numeric(l == 1)
+    # 2% are never revealed (for whatever reason)
     i_rec <- as.logical(rbinom(er[l==1], 1, 0.02))
     er[l==1][i_rec] <- 0
   }
@@ -99,7 +101,7 @@ get_design <- function(N = 2500, pop_spec = NULL, idx_s = 1){
   # determine allocation of surgery type
   ra <- (1-er) * sr + er * r * (sr)
 
-  # max of 1 unit or 0.5% of the allocated treatments switch to a different surg type
+  # 0.5% of the allocated treatments switch to a different surg type (constrain to min of 1 unit)
   srp <- ra
   ic <- rbinom(N, 1, 0.005)
   if(all(ic == 0)){ ic[sample(length(ic), 1)] <- 1 } # add at least one cross over (there is always one)
@@ -125,7 +127,8 @@ get_design <- function(N = 2500, pop_spec = NULL, idx_s = 1){
   }
   ed <- dtmp$ed
 
-  # rand to long (0), short (1) based on surgery received
+  # rand to long (0), short (1) for one-stage
+  # rand to short (0), long (1) for two-stage
 
   d <- rep(NA, N)
   for(i in 1:length(pop_spec$r_b)){
@@ -158,7 +161,11 @@ get_design <- function(N = 2500, pop_spec = NULL, idx_s = 1){
     er, ed, ef,
     erx = 1-er, edx = 1-ed, efx=1-ef,
     r, sr, sra, ra,
-    ic, rp, srp, srp2 = as.numeric(srp == 2), d,
+    ic, rp,
+    srp,
+    srp1 = as.numeric(srp == 1),
+    srp2 = as.numeric(srp == 2),
+    d,
     f
   )
 
@@ -180,22 +187,12 @@ get_trial_data <- function(
       m <- sim_spec$m
       b <- sim_spec$b
 
-      # eta <- a0 +
-      #   m["l1"] * d$l1 + m["l2"] * d$l2 + m["j"] * d$j +
-      #   m["l1j"] * d$l1 * d$j + m["l2j"] * d$l2 * d$j +
-      #   b["erx"] * d$erx +
-      #   (b["r1"] * d$r + b["r2"] * d$r * d$srp2) * d$er +
-      #   b["edx"] * d$edx +
-      #   (b["r1d"] * d$rp * d$d + b["r2d"] * d$rp * d$d * d$srp2) * d$ed +
-      #   b["efx"] * d$efx +
-      #   b["f"] * d$f * d$ef
-
       eta <- a0 +
         m["l1"] * d$l1 + m["l2"] * d$l2 +
         b["erx"] * d$erx +
         (b["r1"] * d$r + b["r2"] * d$r * d$srp2) * d$er +
         b["edx"] * d$edx +
-        (b["r1d"] * d$rp * d$d + b["r2d"] * d$rp * d$d * d$srp2) * d$ed +
+        (b["r1d"] * d$rp * d$d * d$srp1 + b["r2d"] * d$rp * d$d * d$srp2) * d$ed +
         b["efx"] * d$efx +
         b["f"] * d$f * d$ef
 
@@ -233,14 +230,16 @@ get_trial_data <- function(
 get_stan_data <- function(d){
 
   d_s <- d[, .(y = sum(y), n = .N),
-           keyby = .(l1, l2, er, ed, ef, r, rp, srp2, d, f)]
+           keyby = .(l1, l2, er, ed, ef, r, rp, srp, srp2, d, f)]
 
   ld <- list(
     N = nrow(d_s), y = d_s$y, n = d_s$n,
     l1 = d_s$l1, l2 = d_s$l2,
     er = d_s$er, ed = d_s$ed, ef = d_s$ef,
     r = d_s$r, d = d_s$d, f = d_s$f,
-    rp = d_s$rp, srp2 = d_s$srp2,
+    rp = d_s$rp,
+    srp1 = as.numeric(d_s$srp == 1),
+    srp2 = as.numeric(d_s$srp == 2),
     pri_m_sd = rep(1, 2),
     pri_b_sd = rep(1, 8),
     prior_only = 0
