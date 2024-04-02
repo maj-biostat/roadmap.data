@@ -8,26 +8,37 @@ idx_s = 1
 
 
 
-# Design contains variables:
-# l silo membership (early, late, chronic)
-# l1 indicator for late silo membership
-# l2 indicator for late silo membership
-# j indicator for hip joint
-# er indicator for reveal of surgical domain
-# ed indicator for reveal of duration domain
-# ef indicator for reveal of choice domain
-# erx indicator for non-reveal of surgical domain
-# edx efx
-# r random assignment dair/rev
-# sr pref dair/one/two for unit i
-# sra pref one/two for unit i
-# ra allocation of surgical procedure (dair, one, two)
-# ic indicator of cross over
-# rp surgery received dair/rev
-# srp selection of actual procedure
-# srp2 indicator of two stage procedure performed
-# d duration random assignment
-# f ab choice random assignment
+# Fields in data output:
+# id: pt id
+# l: strata 0 early, 1 late, 2 chronic
+# l1: strata indicator for late
+# l2: strata indicator for chronic
+# j: joint indicator knee/hip
+# er: revealed indicator surgery
+# ed: revealed indicator duration
+# ef: revealed indicator choice
+# erx: 1 - revealed = non-revealed indicator for surgery
+# edx: 1 - revealed = non-revealed indicator for duration
+# efx: 1 - revealed = non-revealed indicator for choice
+# r: randomisation for surgery domain, dair vs rev hard-coded restriction to late
+# sr: preferred surgery at elicited at baseline (0 dair, 1 one-stage, 2 two-stage)
+# sra: indicator derived from sr for preference for two-stage
+# ra: allocated surgical approach accounting for whether rand in surg or not
+# ic: indicator for treatment switch (what was planned was not received).
+# rp: indicator of performed surgical approach (0 dair, 1 rev)
+# srp: performed surgical approach (0 dair, 1 one-stage, 2 two-stage)
+# srp1: indicator for one-stage performed
+# srp2: indicator for two-stage performed
+# Duration domain depends on what surgery was received, NOT what was planned.
+# Because of the questions of interest:
+# For one-stage long (0), short (1)
+# For two-stage short (0), long (1)
+# d: indicator for short/long duration
+# f: indicator for choice (0 no-rif, 1 rif)
+# t0: enrolment time
+# eta_y: log-odds treatment success
+# p_y: pr treatment success
+# y: observed outcome (0 fail, 1 success)
 
 # N = 1e6
 # idx_s = 1
@@ -55,11 +66,12 @@ get_design <- function(N = 2500, pop_spec = NULL, idx_s = 1){
 
   # if rand has been shut off then do not enrol any more into surgical domain
   if(all(is.na(unlist(pop_spec$r_a)))){
+    # no surgical allocation revealed.
     er <- rep(0, N)
   } else{
     # only late silo can enter surgical domain
     er <- as.numeric(l == 1)
-    # 2% are never revealed (for whatever reason)
+    # 2% are never revealed (for whatever reason) - likely unnecessary
     i_rec <- as.logical(rbinom(er[l==1], 1, 0.02))
     er[l==1][i_rec] <- 0
   }
@@ -175,6 +187,40 @@ get_design <- function(N = 2500, pop_spec = NULL, idx_s = 1){
   D
 }
 
+# Generates trial data for cohort size specified by N along with pop_spec and
+# sim_spec (if provided otherwise defaults used) according to linear predictor
+# specified in g.
+# Fields in data output:
+# id: pt id
+# l: strata 0 early, 1 late, 2 chronic
+# l1: strata indicator for late
+# l2: strata indicator for chronic
+# j: joint indicator knee/hip
+# er: revealed indicator surgery
+# ed: revealed indicator duration
+# ef: revealed indicator choice
+# erx: 1 - revealed = non-revealed indicator for surgery
+# edx: 1 - revealed = non-revealed indicator for duration
+# efx: 1 - revealed = non-revealed indicator for choice
+# r: randomisation for surgery domain, dair vs rev hard-coded restriction to late
+# sr: preferred surgery at elicited at baseline (0 dair, 1 one-stage, 2 two-stage)
+# sra: indicator derived from sr for preference for two-stage
+# ra: allocated surgical approach accounting for whether rand in surg or not
+# ic: indicator for treatment switch (what was planned was not received).
+# rp: indicator of performed surgical approach (0 dair, 1 rev)
+# srp: performed surgical approach (0 dair, 1 one-stage, 2 two-stage)
+# srp1: indicator for one-stage performed
+# srp2: indicator for two-stage performed
+# Duration domain depends on what surgery was received, NOT what was planned.
+# Because of the questions of interest:
+# For one-stage long (0), short (1)
+# For two-stage short (0), long (1)
+# d: indicator for short/long duration
+# f: indicator for choice (0 no-rif, 1 rif)
+# t0: enrolment time
+# eta_y: log-odds treatment success
+# p_y: pr treatment success
+# y: observed outcome (0 fail, 1 success)
 get_trial_data <- function(
     N = 100000,
     pop_spec = NULL,
@@ -192,6 +238,10 @@ get_trial_data <- function(
         b["erx"] * d$erx +
         (b["r1"] * d$r + b["r2"] * d$r * d$srp2) * d$er +
         b["edx"] * d$edx +
+
+        # move to separation of effects for duration based on
+        # one-stage and two-stage rather than a linear combination of
+        # terms as was done earlier on in develoment.
         (b["r1d"] * d$rp * d$d * d$srp1 + b["r2d"] * d$rp * d$d * d$srp2) * d$ed +
         b["efx"] * d$efx +
         b["f"] * d$f * d$ef
@@ -227,6 +277,10 @@ get_trial_data <- function(
   )
 }
 
+# Wraps up data (expected to have the structure as generated from
+# get_trial_data) and puts it into list suitable for stan model.
+# Clearly, explicit dependency on model spec so probably doesn't belong here
+# and should be refactored out to main sim code.
 get_stan_data <- function(d){
 
   d_s <- d[, .(y = sum(y), n = .N),
