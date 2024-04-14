@@ -243,7 +243,7 @@ get_trial_data <- function(
 
       eta <- a0 +
         m["l1"] * d$l1 + m["l2"] * d$l2 +
-        (b["erx-r0"] * d$srp0 + b["erx-r1"] * d$srp1 + b["erx-r2"] * d$srp2) * d$erx +
+        (b["erx"] + b["erx-r1"] * d$srp1 + b["erx-r2"] * d$srp2) * d$erx +
         # move to separation of effects for duration based on
         # one-stage and two-stage rather than a linear combination of
         # terms as was done earlier on in develoment.
@@ -334,7 +334,39 @@ get_enrol_time <- function(N = 2500, lambda = 1.52,
   c(0, nhpp.event.times(lambda, N - 1, rho))
 }
 
+get_design_opts <- function(){
 
+  d_x <- CJ(
+    l = c("e", "l", "c"),
+    er = c("rand", "nonrand"),
+    r = c("dair", "rev"),
+    sr = c("dair", "one", "two"),
+    ed = c("rand", "nonrand"),
+    d = c("short", "long"),
+    ef = c("rand", "nonrand"),
+    f = c("norif", "rif")
+  )
+
+  d_x <- d_x[!(er == "nonrand" & ed == "nonrand" & ef == "nonrand")]
+  d_x <- d_x[!(l == "e" & er == "rand")]
+  d_x <- d_x[!(l == "c" & er == "rand")]
+  d_x <- d_x[!(l == "l" & er == "nonrand")]
+
+  d_x <- d_x[!(l == "e" & sr == "two")]
+
+  d_x <- d_x[!(r == "dair" & sr == "one")]
+  d_x <- d_x[!(r == "dair" & sr == "two")]
+  d_x <- d_x[!(r == "rev" & sr == "dair")]
+  d_x <- d_x[!(r == "dair" & ed == "rand")]
+
+  d_x <- d_x[!(ed == "nonrand" & r == "rev")]
+  d_x <- d_x[!(ef == "nonrand" & f == "rif")]
+
+  fwrite(d_x, "x.csv")
+
+
+
+}
 
 test_get_design <- function(){
 
